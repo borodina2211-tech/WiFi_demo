@@ -7,7 +7,6 @@ const PORT = process.env.PORT || 8080;
 const MAX_HOST = process.env.MAX_HOST || '127.0.0.1';
 const MAX_PORT = parseInt(process.env.MAX_PORT) || 7400;
 
-// Single HTTP server that also handles WebSocket upgrades
 const server = http.createServer((req, res) => {
   res.writeHead(200);
   res.end('Max MSP Tap Bridge OK\n');
@@ -19,16 +18,16 @@ const udpClient = dgram.createSocket('udp4');
 let participants = {};
 let participantCounter = 0;
 
-console.log(`🎵 Max MSP Tap Bridge starting on port ${PORT}`);
-console.log(`📡 Forwarding UDP to ${MAX_HOST}:${MAX_PORT}`);
+console.log('Max MSP Tap Bridge starting on port ' + PORT);
+console.log('Forwarding UDP to ' + MAX_HOST + ':' + MAX_PORT);
 
 wss.on('connection', (ws) => {
   participantCounter++;
   const id = participantCounter;
-  const name = `Participant ${id}`;
+  const name = 'Participant ' + id;
   participants[id] = { ws, name };
 
-  console.log(`✅ ${name} connected (${Object.keys(participants).length} total)`);
+  console.log(name + ' connected');
 
   ws.send(JSON.stringify({ type: 'welcome', id, name, participantCount: Object.keys(participants).length }));
   broadcast({ type: 'participantCount', count: Object.keys(participants).length });
@@ -38,8 +37,8 @@ wss.on('connection', (ws) => {
       const msg = JSON.parse(data);
 
       if (msg.type === 'tap') {
-        console.log(`🥁 TAP from ${name} | key: ${msg.key}`);
-        const udpMsg = Buffer.from(`tap ${id} ${msg.key}`);
+        console.log('TAP from ' + name + ' key: ' + msg.key);
+        const udpMsg = Buffer.from('tap ' + id + ' ' + msg.key);
         udpClient.send(udpMsg, MAX_PORT, MAX_HOST, (err) => {
           if (err) console.error('UDP error:', err);
         });
@@ -57,7 +56,7 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
-    console.log(`❌ ${name} disconnected`);
+    console.log(name + ' disconnected');
     delete participants[id];
     broadcast({ type: 'participantCount', count: Object.keys(participants).length });
   });
@@ -71,5 +70,5 @@ function broadcast(msg) {
 }
 
 server.listen(PORT, () => {
-  console.log(`✅ Server listening on port ${PORT}`);
+  console.log('Server listening on port ' + PORT);
 });
