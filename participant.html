@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TAP — Live Performance</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&display=swap');
+
+  :root {
+    --bg: #0a0a0a;
+    --surface: #111;
+    --accent: #ff3c00;
+    --accent2: #ffcc00;
+    --text: #f0ede6;
+    --muted: #444;
+    --glow: rgba(255, 60, 0, 0.4);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    width: 100%;
+    max-width: 600px;
+    padding: 2rem;
+  }
+
+  .title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(5rem, 18vw, 10rem);
+    letter-spacing: 0.05em;
+    line-height: 0.9;
+    color: var(--text);
+    text-shadow: 0 0 60px var(--glow);
+    margin-bottom: 0.2em;
+  }
+
+  .subtitle {
+    font-size: 0.65rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 3rem;
+  }
+
+  .status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    margin-bottom: 3rem;
+    text-transform: uppercase;
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: all 0.3s;
+  }
+  .dot.connected { background: #00e676; box-shadow: 0 0 10px #00e676; }
+  .dot.connecting { background: var(--accent2); animation: blink 1s infinite; }
+
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+  /* Participant selector */
+  .selector-title {
+    font-size: 0.8rem;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 2rem;
+  }
+
+  .selector-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    max-width: 320px;
+    margin: 0 auto 2rem;
+  }
+
+  .participant-btn {
+    background: var(--surface);
+    border: 2px solid var(--muted);
+    color: var(--text);
+    padding: 2.5rem 1rem;
+    border-radius: 12px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.1em;
+  }
+
+  .participant-btn:hover {
+    border-color: var(--accent);
+    background: rgba(255, 60, 0, 0.1);
+    transform: translateY(-3px);
+  }
+
+  .participant-btn:active {
+    transform: scale(0.95);
+  }
+
+  /* Tap zone */
+  .tap-zone {
+    position: relative;
+    width: 200px; height: 200px;
+    margin: 0 auto 2.5rem;
+    cursor: pointer;
+  }
+
+  .tap-ring {
+    position: absolute; inset: 0;
+    border: 2px solid var(--muted);
+    border-radius: 50%;
+    transition: all 0.1s;
+  }
+
+  .tap-ring-2 {
+    position: absolute; inset: 20px;
+    border: 1px solid #222;
+    border-radius: 50%;
+  }
+
+  .tap-button {
+    position: absolute; inset: 30px;
+    background: var(--surface);
+    border: 2px solid #2a2a2a;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+    transition: all 0.08s;
+    cursor: pointer;
+  }
+
+  .tap-label {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.8rem;
+    letter-spacing: 0.1em;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .tap-sublabel {
+    font-size: 0.5rem;
+    letter-spacing: 0.3em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .tap-zone.active .tap-ring {
+    border-color: var(--accent);
+    box-shadow: 0 0 30px var(--glow), 0 0 60px var(--glow);
+    transform: scale(1.05);
+  }
+
+  .tap-zone.active .tap-button {
+    background: var(--accent);
+    border-color: var(--accent);
+    transform: scale(0.95);
+  }
+
+  .tap-zone.active .tap-label { color: #fff; }
+
+  .ripple {
+    position: absolute; inset: -20px;
+    border: 2px solid var(--accent);
+    border-radius: 50%;
+    opacity: 0;
+    animation: rippleOut 0.6s ease-out forwards;
+    pointer-events: none;
+  }
+
+  @keyframes rippleOut {
+    0%   { transform: scale(0.7); opacity: 0.8; }
+    100% { transform: scale(1.3); opacity: 0; }
+  }
+
+  .hint {
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 3rem;
+  }
+
+  .feed {
+    height: 80px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .feed::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 20px;
+    background: linear-gradient(var(--bg), transparent);
+    z-index: 1;
+  }
+
+  .feed-item {
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    line-height: 1.8;
+    transition: color 0.5s;
+    text-transform: uppercase;
+  }
+
+  .feed-item.mine { color: var(--accent2); }
+
+  .name-area {
+    margin-top: 2rem;
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .name-input {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--muted);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    padding: 4px 8px;
+    width: 140px;
+    outline: none;
+    text-align: center;
+    transition: border-color 0.2s;
+  }
+
+  .name-input:focus { border-color: var(--accent); }
+  .name-input::placeholder { color: var(--muted); }
+
+  .name-label {
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .count {
+    margin-top: 2.5rem;
+    font-size: 0.6rem;
+    letter-spacing: 0.25em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .count span { color: var(--accent2); }
+
+  .tap-counter {
+    position: fixed;
+    top: 1.5rem; right: 1.5rem;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 3rem;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+    transition: color 0.3s;
+  }
+
+  .tap-counter.flash { color: var(--accent); }
+
+  @media (max-width: 480px) {
+    .tap-zone { width: 180px; height: 180px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="title">TAP</div>
+  <div class="subtitle">Live Performance Interface</div>
+
+  <div class="status">
+    <div class="dot connecting" id="dot"></div>
+    <span id="status-text">Connecting...</span>
+  </div>
+
+  <!-- PARTICIPANT SELECTOR -->
+  <div id="participantSelector" style="display: block;">
+    <div class="selector-title">Select Your Participant Number</div>
+    <div class="selector-grid">
+      <button class="participant-btn" onclick="selectParticipant(1)">P1</button>
+      <button class="participant-btn" onclick="selectParticipant(2)">P2</button>
+      <button class="participant-btn" onclick="selectParticipant(3)">P3</button>
+      <button class="participant-btn" onclick="selectParticipant(4)">P4</button>
+    </div>
+  </div>
+
+  <!-- TAP AREA (hidden until participant selected) -->
+  <div id="tapArea" style="display: none;">
+    <div class="tap-zone" id="tapZone">
+      <div class="tap-ring"></div>
+      <div class="tap-ring-2"></div>
+      <div class="tap-button">
+        <div class="tap-label" id="participantLabel">TAP</div>
+        <div class="tap-sublabel">or press any key</div>
+      </div>
+    </div>
+
+    <div class="hint">Click · Touch · Any Key</div>
+
+    <div class="feed" id="feed"></div>
+
+    <div class="name-area">
+      <span class="name-label">Your name</span>
+      <input class="name-input" id="nameInput" type="text" placeholder="Anonymous" maxlength="20">
+    </div>
+
+    <div class="count">
+      <span id="pCount">0</span> participant(s) connected
+    </div>
+  </div>
+</div>
+
+<div class="tap-counter" id="tapCounter">0</div>
+
+<script>
+  const SERVER_URL = window.location.hostname === 'localhost'
+    ? 'ws://localhost:8080'
+    : 'wss://wifidemo-production.up.railway.app';
+
+  let ws;
+  let myId = null;
+  let participantNumber = null;  // 1, 2, 3, or 4
+  let tapCount = 0;
+  let myName = 'Anonymous';
+
+  const tapZone = document.getElementById('tapZone');
+  const dot = document.getElementById('dot');
+  const statusText = document.getElementById('status-text');
+  const feed = document.getElementById('feed');
+  const pCount = document.getElementById('pCount');
+  const tapCounter = document.getElementById('tapCounter');
+  const nameInput = document.getElementById('nameInput');
+  const participantLabel = document.getElementById('participantLabel');
+
+  function selectParticipant(num) {
+    participantNumber = num;
+    document.getElementById('participantSelector').style.display = 'none';
+    document.getElementById('tapArea').style.display = 'block';
+    participantLabel.textContent = `P${num} TAP`;
+    
+    // Set name to include participant number
+    myName = `Participant ${num}`;
+    nameInput.value = myName;
+    
+    // Inform server
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'setName', name: myName }));
+      ws.send(JSON.stringify({ type: 'setParticipant', participant: num }));
+    }
+  }
+
+  function connect() {
+    ws = new WebSocket(SERVER_URL);
+
+    ws.onopen = () => {
+      dot.className = 'dot connected';
+      statusText.textContent = 'Connected — ready';
+      
+      // If already selected, send participant info
+      if (participantNumber) {
+        ws.send(JSON.stringify({ type: 'setParticipant', participant: participantNumber }));
+        ws.send(JSON.stringify({ type: 'setName', name: myName }));
+      }
+    };
+
+    ws.onclose = () => {
+      dot.className = 'dot connecting';
+      statusText.textContent = 'Reconnecting...';
+      setTimeout(connect, 2000);
+    };
+
+    ws.onerror = () => {
+      dot.className = 'dot';
+      statusText.textContent = 'Connection error';
+    };
+
+    ws.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+
+      if (msg.type === 'welcome') {
+        myId = msg.id;
+        pCount.textContent = msg.participantCount;
+        statusText.textContent = participantNumber ? `Connected as P${participantNumber}` : 'Connected';
+        addFeed(`You joined`, true);
+      }
+
+      if (msg.type === 'participantCount') {
+        pCount.textContent = msg.count;
+      }
+
+      if (msg.type === 'tap') {
+        const isMe = msg.id === myId;
+        const pNum = msg.participant || '?';
+        addFeed(`P${pNum} tapped (${msg.key})`, isMe);
+        if (!isMe) flashZone();
+      }
+    };
+  }
+
+  function sendTap(key = 'tap') {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    if (!participantNumber) return;  // Don't send if no participant selected
+    
+    ws.send(JSON.stringify({ 
+      type: 'tap', 
+      key: key,
+      participant: participantNumber 
+    }));
+    
+    tapCount++;
+    tapCounter.textContent = tapCount;
+    tapCounter.classList.add('flash');
+    setTimeout(() => tapCounter.classList.remove('flash'), 300);
+    activateZone();
+  }
+
+  function activateZone() {
+    tapZone.classList.add('active');
+    const r = document.createElement('div');
+    r.className = 'ripple';
+    tapZone.appendChild(r);
+    setTimeout(() => { tapZone.classList.remove('active'); r.remove(); }, 600);
+  }
+
+  function flashZone() {
+    tapZone.style.opacity = '0.5';
+    setTimeout(() => tapZone.style.opacity = '1', 150);
+  }
+
+  function addFeed(text, isMe = false) {
+    const item = document.createElement('div');
+    item.className = 'feed-item' + (isMe ? ' mine' : '');
+    item.textContent = `→ ${text}`;
+    feed.appendChild(item);
+    while (feed.children.length > 5) feed.removeChild(feed.firstChild);
+    feed.scrollTop = feed.scrollHeight;
+  }
+
+  // Keyboard
+  document.addEventListener('keydown', (e) => {
+    if (e.target === nameInput) return;
+    if (e.repeat) return;
+    sendTap(e.key);
+  });
+
+  // Click / touch
+  tapZone.addEventListener('mousedown', () => sendTap('click'));
+  tapZone.addEventListener('touchstart', (e) => { e.preventDefault(); sendTap('touch'); });
+
+  // Name
+  nameInput.addEventListener('change', () => {
+    myName = nameInput.value || `Participant ${participantNumber}`;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'setName', name: myName }));
+    }
+  });
+
+  connect();
+</script>
+</body>
+</html>
