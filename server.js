@@ -1,15 +1,24 @@
-// Max MSP Tap Bridge Server — Railway-compatible version
+// Max MSP Tap Bridge Server — UPDATED for participant numbers
 const WebSocket = require('ws');
 const http = require('http');
 const dgram = require('dgram');
+const fs = require('fs');
+const path = require('path');
 
 const PORT = process.env.PORT || 8080;
 const MAX_HOST = process.env.MAX_HOST || '127.0.0.1';
 const MAX_PORT = parseInt(process.env.MAX_PORT) || 7400;
 
 const server = http.createServer((req, res) => {
-  res.writeHead(200);
-  res.end('Max MSP Tap Bridge OK\n');
+  // Serve participant.html
+  if (req.url === '/' || req.url === '/participant.html') {
+    res.writeHead(200, {'Content-Type': 'text/html'});
+    const html = fs.readFileSync(path.join(__dirname, 'participant.html'));
+    res.end(html);
+  } else {
+    res.writeHead(200);
+    res.end('Max MSP Tap Bridge OK\n');
+  }
 });
 
 const wss = new WebSocket.Server({ server });
@@ -25,7 +34,7 @@ wss.on('connection', (ws) => {
   participantCounter++;
   const id = participantCounter;
   const name = 'Participant ' + id;
-  participants[id] = { ws, name };
+  participants[id] = { ws, name, participant: null };
 
   console.log(name + ' connected');
 
@@ -37,12 +46,21 @@ wss.on('connection', (ws) => {
       const msg = JSON.parse(data);
 
       if (msg.type === 'tap') {
-        console.log('TAP from ' + name + ' key: ' + msg.key);
-        const udpMsg = Buffer.from('tap ' + id + ' ' + msg.key);
+        const participant = msg.participant || participants[id].participant || 1;
+        console.log('TAP from P' + participant + ' (socket ' + id + ') key: ' + msg.key);
+        
+        // Send to Max: "tap 1", "tap 2", "tap 3", or "tap 4"
+        const udpMsg = Buffer.from('tap ' + participant);
         udpClient.send(udpMsg, MAX_PORT, MAX_HOST, (err) => {
           if (err) console.error('UDP error:', err);
         });
-        broadcast({ type: 'tap', id, name, key: msg.key, timestamp: Date.now() });
+        
+        broadcast({ type: 'tap', id, name: participants[id].name, key: msg.key, participant });
+      }
+
+      if (msg.type === 'setParticipant') {
+        participants[id].participant = msg.participant;
+        console.log('Socket ' + id + ' is now P' + msg.participant);
       }
 
       if (msg.type === 'setName') {
@@ -56,7 +74,7 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
-    console.log(name + ' disconnected');
+    console.log(participants[id].name + ' disconnected');
     delete participants[id];
     broadcast({ type: 'participantCount', count: Object.keys(participants).length });
   });
