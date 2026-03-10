@@ -1,92 +1,100 @@
-// Max MSP Tap Bridge Server — UPDATED for participant numbers
 const WebSocket = require('ws');
 const http = require('http');
-const dgram = require('dgram');
 const fs = require('fs');
 const path = require('path');
 
 const PORT = process.env.PORT || 8080;
-const MAX_HOST = process.env.MAX_HOST || '127.0.0.1';
-const MAX_PORT = parseInt(process.env.MAX_PORT) || 7400;
 
+// Create HTTP server that serves participant.html
 const server = http.createServer((req, res) => {
-  // Serve participant.html
   if (req.url === '/' || req.url === '/participant.html') {
-    res.writeHead(200, {'Content-Type': 'text/html'});
-    const html = fs.readFileSync(path.join(__dirname, 'participant.html'));
-    res.end(html);
+    const htmlPath = path.join(__dirname, 'participant.html');
+    if (fs.existsSync(htmlPath)) {
+      res.writeHead(200, {'Content-Type': 'text/html'});
+      const html = fs.readFileSync(htmlPath);
+      res.end(html);
+    } else {
+      res.writeHead(404);
+      res.end('participant.html not found!');
+    }
   } else {
     res.writeHead(200);
-    res.end('Max MSP Tap Bridge OK\n');
+    res.end('Max MSP Tap Bridge - Railway Edition');
   }
 });
 
+// Create WebSocket server
 const wss = new WebSocket.Server({ server });
-const udpClient = dgram.createSocket('udp4');
 
-let participants = {};
-let participantCounter = 0;
+let connections = [];
 
-console.log('Max MSP Tap Bridge starting on port ' + PORT);
-console.log('Forwarding UDP to ' + MAX_HOST + ':' + MAX_PORT);
-
-wss.on('connection', (ws) => {
-  participantCounter++;
-  const id = participantCounter;
-  const name = 'Participant ' + id;
-  participants[id] = { ws, name, participant: null };
-
-  console.log(name + ' connected');
-
-  ws.send(JSON.stringify({ type: 'welcome', id, name, participantCount: Object.keys(participants).length }));
-  broadcast({ type: 'participantCount', count: Object.keys(participants).length });
-
+wss.on('connection', (ws, req) => {
+  const isMax = req.url === '/max'; // Max connects to /max endpoint
+  const id = connections.length + 1;
+  
+  connections.push({ 
+    id, 
+    ws, 
+    participant: null,
+    isMax: isMax,
+    type: isMax ? 'MAX' : 'PARTICIPANT'
+  });
+  
+  console.log(`✓ ${isMax ? 'MAX CLIENT' : 'Participant'} ${id} connected (total: ${connections.length})`);
+  
   ws.on('message', (data) => {
     try {
       const msg = JSON.parse(data);
-
+      
+      if (msg.type === 'setParticipant') {
+        const conn = connections.find(c => c.ws === ws);
+        if (conn) {
+          conn.participant = msg.participant;
+          console.log(`✓ Connection ${id} is P${msg.participant}`);
+        }
+      }
+      
       if (msg.type === 'tap') {
-        const participant = msg.participant || participants[id].participant || 1;
-        console.log('TAP from P' + participant + ' (socket ' + id + ') key: ' + msg.key);
+        const conn = connections.find(c => c.ws === ws);
+        const p = conn ? conn.participant : 1;
         
-        // Send to Max: "tap 1", "tap 2", "tap 3", or "tap 4"
-        const udpMsg = Buffer.from('tap ' + participant);
-        udpClient.send(udpMsg, MAX_PORT, MAX_HOST, (err) => {
-          if (err) console.error('UDP error:', err);
+        console.log(`>>> TAP from P${p}`);
+        
+        // Broadcast tap to ALL Max clients
+        const tapMessage = JSON.stringify({
+          type: 'tap',
+          participant: p,
+          timestamp: Date.now()
         });
         
-        broadcast({ type: 'tap', id, name: participants[id].name, key: msg.key, participant });
+        connections.forEach(c => {
+          if (c.isMax && c.ws.readyState === WebSocket.OPEN) {
+            c.ws.send(tapMessage);
+            console.log(`    ✓ Sent to Max client ${c.id}`);
+          }
+        });
       }
-
-      if (msg.type === 'setParticipant') {
-        participants[id].participant = msg.participant;
-        console.log('Socket ' + id + ' is now P' + msg.participant);
-      }
-
-      if (msg.type === 'setName') {
-        participants[id].name = msg.name;
-        broadcast({ type: 'participantCount', count: Object.keys(participants).length });
-      }
-
+      
     } catch (e) {
-      console.error('Parse error:', e);
+      console.log('Parse error:', e.message);
     }
   });
-
+  
   ws.on('close', () => {
-    console.log(participants[id].name + ' disconnected');
-    delete participants[id];
-    broadcast({ type: 'participantCount', count: Object.keys(participants).length });
+    const conn = connections.find(c => c.ws === ws);
+    console.log(`✗ ${conn ? conn.type : 'Connection'} ${id} disconnected`);
+    connections = connections.filter(c => c.ws !== ws);
+  });
+  
+  ws.on('error', (err) => {
+    console.log(`! WebSocket error on connection ${id}:`, err.message);
   });
 });
 
-function broadcast(msg) {
-  const str = JSON.stringify(msg);
-  wss.clients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) client.send(str);
-  });
-}
-
 server.listen(PORT, () => {
-  console.log('Server listening on port ' + PORT);
+  console.log('========================================');
+  console.log(`Railway Server running on port ${PORT}`);
+  console.log(`Participants: wss://[your-railway-url]/participant.html`);
+  console.log(`Max connects: wss://[your-railway-url]/max`);
+  console.log('========================================');
 });
